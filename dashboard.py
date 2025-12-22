@@ -19,7 +19,7 @@ st.markdown("""
 
 # --- HEADER ---
 st.title("🏦 AltScore: AI-Powered Credit Risk Engine")
-st.markdown("**Enterprise Edition:** `v2.3` | **Module:** `Corporate Credit Analysis`")
+st.markdown("**Enterprise Edition:** `v3.0 (Tier 1 Features)` | **Module:** `Momentum & Legal Risk Analysis`")
 st.divider()
 
 # --- SIDEBAR ---
@@ -28,7 +28,6 @@ business_name = st.sidebar.text_input("Target Ticker / Company", value="Apple")
 use_mock = st.sidebar.checkbox("Offline / Simulation Mode", value=False)
 analyze_btn = st.sidebar.button("🚀 Run Risk Analysis")
 
-# --- MAIN LOGIC ---
 if analyze_btn:
     with st.spinner(f"📡 Interfacing with Global News Feeds for '{business_name}'..."):
         
@@ -37,11 +36,11 @@ if analyze_btn:
         scraper = ReviewScraper()
         company = scraper.fetch_data(company, mock=use_mock)
         
-        # 2. COMPUTE RISK
+        # 2. COMPUTE RISK (Now includes Time-Series Math)
         engine = RiskEvaluator()
         company = engine.evaluate(company)
         
-        # --- TABBED INTERFACE (Simplified) ---
+        # --- TABBED INTERFACE ---
         tab1, tab2 = st.tabs(["📊 Risk Dashboard", "📝 Raw Intelligence"])
 
         # TAB 1: The Main Scores
@@ -49,16 +48,34 @@ if analyze_btn:
             st.subheader(f"Risk Assessment: {company.name}")
             col1, col2, col3 = st.columns(3)
             
+            # COLUMN 1: Score + Momentum
             with col1:
-                st.metric("AltCredit Score", f"{company.risk_score}/100")
+                # The 'delta' parameter creates the Green/Red arrow showing trend
+                st.metric(
+                    "AltCredit Score", 
+                    f"{company.risk_score}/100",
+                    delta=f"{company.sentiment_momentum:.3f} Momentum",
+                    delta_color="normal" # Green = Up, Red = Down
+                )
             
+            # COLUMN 2: Sentiment + Volatility
             with col2:
                 sentiment_label = "Positive" if company.sentiment_score > 0 else "Negative"
-                st.metric("News Sentiment", sentiment_label, delta=f"{company.sentiment_score:.3f}")
+                # We show Volatility in the help text or delta
+                st.metric(
+                    "News Sentiment", 
+                    sentiment_label, 
+                    delta=f"Vol: {company.news_volume_volatility:.2f}",
+                    help="Volatility measures the chaos/uncertainty of the news cycle."
+                )
                 
+            # COLUMN 3: Decision Logic (Tier 1: Legal Hard Stop)
             with col3:
-                # Decision Thresholds
-                if company.risk_score >= 60:
+                # Check for Lawsuit Flag FIRST (Priority 1)
+                if company.lawsuit_flag:
+                    st.error("⛔ DECISION: REJECT (LEGAL RISK)")
+                    st.caption("Critical Flag: Lawsuit/Fraud detected.")
+                elif company.risk_score >= 55:
                     st.success("✅ DECISION: APPROVE LOAN")
                 elif company.risk_score >= 40:
                     st.warning("⚠️ DECISION: MANUAL REVIEW")
@@ -78,7 +95,7 @@ if analyze_btn:
                 ax.bar(range(len(scores)), scores, color=colors)
                 ax.axhline(0, color='black', linewidth=0.8)
                 ax.set_ylabel("Sentiment Polarity")
-                ax.set_xlabel("News Event Sequence")
+                ax.set_xlabel("News Event Sequence (Oldest -> Newest)")
                 st.pyplot(fig)
             else:
                 st.info("No sufficient data for volatility plotting.")

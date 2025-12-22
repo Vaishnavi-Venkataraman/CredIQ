@@ -28,6 +28,10 @@ class Company:
     # Calculated Scores (We will fill these later)
     sentiment_score: float = 0.0
     risk_score: float = 0.0
+
+    sentiment_momentum: float = 0.0  # Positive = Improving, Negative = Worsening
+    news_volume_volatility: float = 0.0 # How chaotic is the news cycle?
+    lawsuit_flag: bool = False # Hard stop flag for legal risks
     
     def add_review(self, source, text, rating, date):
         """Helper method to add a review safely."""
@@ -39,5 +43,7 @@ class Company:
         return {
             "Name": self.name,
             "Total Reviews": len(self.reviews),
-            "Risk Score": self.risk_score
+            "Risk Score": self.risk_score,
+            "Momentum": self.sentiment_momentum, # Added to summary
+            "Legal Flag": self.lawsuit_flag # Added to summary
         }
