@@ -6,76 +6,76 @@ from textblob import TextBlob
 from src.models import Company
 from src.scraper import ReviewScraper
 from src.risk_engine import RiskEvaluator
+from src.pdf_analyzer import FinancialAnalyzer # Import the new module
 
-# --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="AltScore: Risk Engine", layout="wide", page_icon="🏦")
+st.markdown("""<style>.metric-card { background-color: #f0f2f6; padding: 20px; border-radius: 10px; text-align: center; }</style>""", unsafe_allow_html=True)
 
-# --- CSS ---
-st.markdown("""
-    <style>
-    .metric-card { background-color: #f0f2f6; padding: 20px; border-radius: 10px; text-align: center; }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- HEADER ---
 st.title("🏦 AltScore: AI-Powered Credit Risk Engine")
-st.markdown("**Enterprise Edition:** `v3.0 (Tier 1 Features)` | **Module:** `Momentum & Legal Risk Analysis`")
+st.markdown("**Enterprise Edition:** `v3.2 (Tier 3 Features)` | **Module:** `Financial Statement Verification`")
 st.divider()
 
 # --- SIDEBAR ---
 st.sidebar.header("🔍 Due Diligence Controls")
-business_name = st.sidebar.text_input("Target Ticker / Company", value="Apple")
+business_name = st.sidebar.text_input("Target Ticker / Company", value="Apple Inc.")
 use_mock = st.sidebar.checkbox("Offline / Simulation Mode", value=False)
+
+st.sidebar.divider()
+st.sidebar.subheader("📂 Financial Documents")
+uploaded_file = st.sidebar.file_uploader("Upload Bank Statement (PDF)", type="pdf")
+
 analyze_btn = st.sidebar.button("🚀 Run Risk Analysis")
 
 if analyze_btn:
-    with st.spinner(f"📡 Interfacing with Global News Feeds for '{business_name}'..."):
+    with st.spinner(f"📡 Hunting data for '{business_name}'..."):
         
         # 1. SETUP & SCRAPE
         company = Company(name=business_name, url="") 
         scraper = ReviewScraper()
         company = scraper.fetch_data(company, mock=use_mock)
         
-        # 2. COMPUTE RISK (Now includes Time-Series Math)
+        # 2. PROCESS PDF (Tier 3)
+        if uploaded_file:
+            st.sidebar.success("PDF Uploaded! Analyzing...")
+            pdf_engine = FinancialAnalyzer()
+            balance = pdf_engine.analyze_statement(uploaded_file)
+            
+            if balance > 0:
+                company.cash_balance = balance
+                company.has_verified_financials = True
+                st.sidebar.info(f"Verified Balance: ${balance:,.2f}")
+            else:
+                st.sidebar.warning("Could not extract 'Ending Balance' from PDF.")
+
+        # 3. COMPUTE RISK
         engine = RiskEvaluator()
         company = engine.evaluate(company)
         
+        # --- HEADER METRICS ---
+        st.subheader(f"📂 Corporate Profile: {company.name}")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Business Age", f"{company.business_age} Years")
+        c2.metric("Industry", company.industry if company.industry else "Unknown")
+        # New Metric for Cash
+        cash_display = f"${company.cash_balance:,.0f}" if company.has_verified_financials else "Unverified"
+        c3.metric("Verified Cash", cash_display, delta="Liquidity Verified" if company.has_verified_financials else None)
+        c4.metric("Legal Status", "Clean" if not company.lawsuit_flag else "Flagged", delta_color="inverse" if company.lawsuit_flag else "off")
+        st.divider()
+
         # --- TABBED INTERFACE ---
         tab1, tab2 = st.tabs(["📊 Risk Dashboard", "📝 Raw Intelligence"])
 
-        # TAB 1: The Main Scores
         with tab1:
-            st.subheader(f"Risk Assessment: {company.name}")
             col1, col2, col3 = st.columns(3)
-            
-            # COLUMN 1: Score + Momentum
             with col1:
-                # The 'delta' parameter creates the Green/Red arrow showing trend
-                st.metric(
-                    "AltCredit Score", 
-                    f"{company.risk_score}/100",
-                    delta=f"{company.sentiment_momentum:.3f} Momentum",
-                    delta_color="normal" # Green = Up, Red = Down
-                )
-            
-            # COLUMN 2: Sentiment + Volatility
+                st.metric("AltCredit Score", f"{company.risk_score}/100", delta=f"{company.sentiment_momentum:.3f} Momentum")
             with col2:
                 sentiment_label = "Positive" if company.sentiment_score > 0 else "Negative"
-                # We show Volatility in the help text or delta
-                st.metric(
-                    "News Sentiment", 
-                    sentiment_label, 
-                    delta=f"Vol: {company.news_volume_volatility:.2f}",
-                    help="Volatility measures the chaos/uncertainty of the news cycle."
-                )
-                
-            # COLUMN 3: Decision Logic (Tier 1: Legal Hard Stop)
+                st.metric("News Sentiment", sentiment_label, delta=f"Vol: {company.news_volume_volatility:.2f}")
             with col3:
-                # Check for Lawsuit Flag FIRST (Priority 1)
                 if company.lawsuit_flag:
                     st.error("⛔ DECISION: REJECT (LEGAL RISK)")
-                    st.caption("Critical Flag: Lawsuit/Fraud detected.")
-                elif company.risk_score >= 55:
+                elif company.risk_score >= 60:
                     st.success("✅ DECISION: APPROVE LOAN")
                 elif company.risk_score >= 40:
                     st.warning("⚠️ DECISION: MANUAL REVIEW")
@@ -84,28 +84,17 @@ if analyze_btn:
 
             st.divider()
             
-            # Sentiment Volatility Chart
-            st.subheader("Market Volatility Analysis")
             if company.reviews:
+                st.subheader("Market Volatility & Sentiment Trend")
                 scores = [TextBlob(r.text).sentiment.polarity for r in company.reviews]
-                
-                # Charting
                 fig, ax = plt.subplots(figsize=(10, 3))
                 colors = ['#4CAF50' if x > 0 else '#F44336' for x in scores]
                 ax.bar(range(len(scores)), scores, color=colors)
                 ax.axhline(0, color='black', linewidth=0.8)
-                ax.set_ylabel("Sentiment Polarity")
-                ax.set_xlabel("News Event Sequence (Oldest -> Newest)")
                 st.pyplot(fig)
-            else:
-                st.info("No sufficient data for volatility plotting.")
 
-        # TAB 2: The Data (Raw Evidence)
         with tab2:
-            st.subheader("Extracted Intelligence Source")
+            st.subheader("Extracted Intelligence")
             if company.reviews:
-                # Convert to DataFrame for a nice searchable table
                 data = [{"Date": r.date, "Headline": r.text, "Source": r.source} for r in company.reviews]
                 st.dataframe(pd.DataFrame(data), use_container_width=True)
-            else:
-                st.warning("No data found.")

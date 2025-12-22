@@ -6,8 +6,7 @@ import numpy as np
 
 class RiskEvaluator:
     """
-    Tier 1 Upgrade: Momentum & Velocity Risk Engine.
-    Calculates trends (Momentum) and stability (Volatility) using Time-Series data.
+    Tier 3 Upgrade: Adds Financial Verification Logic (Cash Flow).
     """
 
     def evaluate(self, company: Company) -> Company:
@@ -15,91 +14,96 @@ class RiskEvaluator:
             company.risk_score = 50.0 
             return company
 
-        # 1. Convert Reviews to Pandas DataFrame for Time-Series Math
+        # 1. Convert Reviews to Pandas
         data = []
-        
-        # KEYWORDS that trigger a hard stop
         CRITICAL_RISK_TERMS = ["bankruptcy", "fraud", "investigation", "subpoena", "default", "scandal", "lawsuit"]
-
+        
         print(f"--- 🧠 Analyzing Risk for {company.name} ---")
 
         for review in company.reviews:
-            # NLP Processing
             blob = TextBlob(review.text)
             polarity = blob.sentiment.polarity
             
-            # Compliance Check (Hard Stop Flag)
+            # Compliance Check
             text_lower = review.text.lower()
             if any(term in text_lower for term in CRITICAL_RISK_TERMS):
-                print(f"⚠️ RED FLAG DETECTED: Found critical term in review.")
-                polarity = -1.0 # Force max negative sentiment for this specific item
-                company.lawsuit_flag = True # Set the binary flag
+                print(f"⚠️ RED FLAG DETECTED: {review.text[:30]}...")
+                polarity = -1.0 
+                company.lawsuit_flag = True
             
-            # Collect data for DataFrame
-            # We use 'errors=coerce' to handle potential date parsing issues gracefully
             data.append({
                 "date": pd.to_datetime(review.date, errors='coerce'), 
                 "sentiment": polarity
             })
             
-        # Create DataFrame and drop invalid dates
-        df = pd.DataFrame(data).dropna(subset=['date'])
+        df = pd.DataFrame(data).dropna(subset=['date']).sort_values(by="date")
         
         if df.empty:
             company.risk_score = 50.0
             return company
 
-        # Sort by date (Oldest -> Newest) to calculate Momentum correctly
-        df = df.sort_values(by="date")
-
-        # --- 2. CALCULATE MOMENTUM (Tier 1 Feature) ---
-        # Compare "Recent" (Last 3 items) vs "Historical" (The rest)
-        # Logic: If recent news is worse than historical average, Momentum is negative.
+        # --- CALCULATE METRICS ---
         if len(df) >= 3:
             recent_avg = df['sentiment'].tail(3).mean()
             historical_avg = df['sentiment'].iloc[:-3].mean() if len(df) > 3 else 0.0
-            
-            # Momentum = Recent Performance - Historical Baseline
             company.sentiment_momentum = recent_avg - historical_avg
-        else:
-            company.sentiment_momentum = 0.0 # Not enough data for trend
-
-        # --- 3. CALCULATE VOLATILITY (Tier 1 Feature) ---
-        # Standard Deviation measures chaos. If news swings wildly (+1 to -1), volatility is high.
+        
         volatility = df['sentiment'].std()
         if np.isnan(volatility): volatility = 0.0
         company.news_volume_volatility = volatility
 
-        # --- 4. FINAL WEIGHTED SCORING MODEL ---
-        
-        # Base Score: Standardized average
+        # --- SCORING MODEL v3.2 ---
         avg_sentiment = df['sentiment'].mean()
-        company.sentiment_score = avg_sentiment
+        score = 50 + (avg_sentiment * 80) 
         
-        # Scale: 0.0 sentiment -> 50 score. +0.5 sentiment -> 90 score.
-        score_raw = 50 + (avg_sentiment * 80) 
-        
-        # Apply Penalties
-        
-        # Penalty A: Crashing Momentum
+        # 1. Momentum Penalty
         if company.sentiment_momentum < -0.15:
-            print(f"📉 MOMENTUM PENALTY: Trend is crashing ({company.sentiment_momentum:.2f})")
-            score_raw -= 10
+            print("📉 PENALTY: Negative Momentum")
+            score -= 10
             
-        # Penalty B: High Volatility (Uncertainty)
+        # 2. Volatility Penalty
         if volatility > 0.4:
-            print(f"🌊 VOLATILITY PENALTY: High uncertainty detected ({volatility:.2f})")
-            score_raw -= 5
+            print("🌊 PENALTY: High Volatility")
+            score -= 5
             
-        # Clamp Score (0-100)
-        final_score = max(0, min(100, score_raw))
+        # --- TIER 2: STABILITY ADJUSTMENTS ---
         
-        # --- 5. THE HARD STOP (Regulatory Gate) ---
-        # If a lawsuit/fraud is detected, the score CANNOT exceed 40 (Auto-Reject).
+        # A. Business Age Logic
+        if company.business_age > 0:
+            if company.business_age < 2:
+                print("👶 RISK: Startup (<2 years)")
+                score -= 15 # High failure risk
+            elif company.business_age > 20:
+                print("🏛️ BONUS: Legacy Business (>20 years)")
+                score += 5 # Proven track record
+                
+        # B. Industry Risk (Simple Keyword Match)
+        high_risk_sectors = ["Restaurant", "Retail", "Airlines", "Construction"]
+        if any(x in company.industry for x in high_risk_sectors):
+            print(f"🏭 RISK: High-Risk Sector ({company.industry})")
+            score -= 5
+
+        # --- TIER 3: FINANCIAL LIQUIDITY CHECK (New!) ---
+        # If the user uploaded a PDF and we found a balance:
+        if company.has_verified_financials:
+            if company.cash_balance > 50000:
+                print("💰 BONUS: Strong Cash Reserves (>$50k)")
+                score += 15 # Huge confidence boost
+            elif company.cash_balance > 10000:
+                print("💵 BONUS: Healthy Cash Flow (>$10k)")
+                score += 5
+            elif company.cash_balance < 1000:
+                print("📉 RISK: Low Cash Reserves (<$1k)")
+                score -= 10
+
+        # Final Cap
+        final_score = max(0, min(100, score))
+        
         if company.lawsuit_flag:
-            print("⛔ HARD STOP TRIGGERED: Legal flag active. Capping score at 40.")
+            print("⛔ HARD STOP: Legal Flag")
             final_score = min(final_score, 40.0)
             
         company.risk_score = round(final_score, 2)
+        company.sentiment_score = avg_sentiment
         
         return company

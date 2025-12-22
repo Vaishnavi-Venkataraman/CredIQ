@@ -5,45 +5,46 @@ import datetime
 
 @dataclass
 class Review:
-    """Class to represent a single customer review."""
-    source: str  # e.g., "Yelp", "Google"
+    source: str
     text: str
     rating: float
     date: str
 
 @dataclass
 class Company:
-    """
-    The Core Domain Model. 
-    This represents the business applying for the loan.
-    """
     name: str
     url: str
     
-    # Financial/Risk Indicators (Defaults to None/Empty initially)
+    # Containers
     reviews: List[Review] = field(default_factory=list)
     competitors: List[str] = field(default_factory=list)
-    founding_year: Optional[int] = None
     
-    # Calculated Scores (We will fill these later)
+    # Tier 2 Metadata
+    founding_year: int = 0
+    business_age: int = 0
+    industry: str = "Unknown"
+    headquarters: str = "Unknown"
+    
+    # --- TIER 3: FINANCIAL DATA  ---
+    cash_balance: float = 0.0  # From PDF
+    has_verified_financials: bool = False
+    
+    # Scores
     sentiment_score: float = 0.0
     risk_score: float = 0.0
 
-    sentiment_momentum: float = 0.0  # Positive = Improving, Negative = Worsening
-    news_volume_volatility: float = 0.0 # How chaotic is the news cycle?
-    lawsuit_flag: bool = False # Hard stop flag for legal risks
+    # Tier 1 Metrics
+    sentiment_momentum: float = 0.0
+    news_volume_volatility: float = 0.0
+    lawsuit_flag: bool = False
     
     def add_review(self, source, text, rating, date):
-        """Helper method to add a review safely."""
-        new_review = Review(source, text, rating, date)
-        self.reviews.append(new_review)
+        self.reviews.append(Review(source, text, rating, date))
 
     def summary(self):
-        """Returns a quick summary of the company data."""
         return {
             "Name": self.name,
-            "Total Reviews": len(self.reviews),
-            "Risk Score": self.risk_score,
-            "Momentum": self.sentiment_momentum, # Added to summary
-            "Legal Flag": self.lawsuit_flag # Added to summary
+            "Age": f"{self.business_age} Years",
+            "Cash Reserves": f"${self.cash_balance:,.2f}" if self.has_verified_financials else "Unverified",
+            "Risk Score": self.risk_score
         }
