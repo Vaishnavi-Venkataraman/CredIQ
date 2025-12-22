@@ -5,13 +5,11 @@ import pandas as pd
 import numpy as np
 
 class RiskEvaluator:
-    """
-    Tier 5 Upgrade: Explainable AI with Reason Codes.
-    """
 
     def evaluate(self, company: Company) -> Company:
         # Clear previous reasons to avoid duplicates
         company.decision_reasons = []
+        company.contagion_penalty = 0.0 # Reset contagion penalty
         
         if not company.reviews:
             company.risk_score = 50.0
@@ -91,10 +89,20 @@ class RiskEvaluator:
                 score -= 10
                 company.decision_reasons.append("CRITICAL: Insufficient cash reserves verified (< $1,000).")
 
+        # 6. TIER 4: CONTAGION RISK (New!) 
+        # Logic: If a related entity is failing (Score < 50), penalize this company.
+        for entity in company.related_entities:
+            if entity["Risk_Score"] < 50:
+                penalty = 10.0
+                company.contagion_penalty += penalty
+                score -= penalty
+                company.decision_reasons.append(f"Contagion Risk: Sister company '{entity['Name']}' is distressed.")
+                print(f"🕸️ CONTAGION: Penalty applied due to {entity['Name']}")
+
         # Final Cap
         final_score = max(0, min(100, score))
         
-        # 6. Hard Stop Logic (The most important reason)
+        # 7. Hard Stop Logic (The most important reason)
         if company.lawsuit_flag:
             final_score = min(final_score, 40.0)
             # Insert at the TOP of the list

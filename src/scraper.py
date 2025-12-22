@@ -23,8 +23,12 @@ class ReviewScraper:
         # 1. Fetch News (Tier 1)
         company = self._fetch_google_news(company)
         
-        # 2. Fetch Metadata (Tier 2 - NEW)
+        # 2. Fetch Metadata (Tier 2)
         company = self._fetch_wikipedia_data(company)
+
+        # 3. Fetch Contagion Data (Tier 4 - NEW)
+        # This maps owners and related companies for the graph
+        company = self._fetch_contagion_links(company)
         
         return company
 
@@ -81,12 +85,10 @@ class ReviewScraper:
                     
                     if infobox:
                         # 1. Get Founded Year
-                        # Look for a row with 'Founded' in header
                         for row in infobox.find_all("tr"):
                             header = row.find("th")
                             if header and "Founded" in header.text:
                                 text = row.find("td").text
-                                # Regex to find 4 digit year (e.g. 1976)
                                 match = re.search(r'\d{4}', text)
                                 if match:
                                     company.founding_year = int(match.group(0))
@@ -109,6 +111,36 @@ class ReviewScraper:
         print("⚠️ Metadata not found on Wikipedia. Using defaults.")
         return company
 
+    def _fetch_contagion_links(self, company: Company) -> Company:
+        """
+        Tier 4: Simulates ownership graphs for famous entities to demonstrate Systemic Risk.
+        In a real app, this would query a Neo4j database or Crunchbase API.
+        """
+        print(f"--- 🕸️ Contagion: Mapping network for '{company.name}' ---")
+        name_lower = company.name.lower()
+        
+        # DEMO DATASET: Map Companies to Owners & Sister Companies
+        if "tesla" in name_lower or "spacex" in name_lower or "twitter" in name_lower or "x corp" in name_lower:
+            company.key_people.append({"Name": "Elon Musk", "Role": "CEO"})
+            # Simulating that 'X' is high risk to show contagion effect
+            company.related_entities.append({"Name": "SpaceX", "Risk_Score": 85, "Relation": "Sister Co."})
+            company.related_entities.append({"Name": "X (Twitter)", "Risk_Score": 35, "Relation": "Sister Co."}) # High Risk!
+            
+        elif "meta" in name_lower or "facebook" in name_lower:
+            company.key_people.append({"Name": "Mark Zuckerberg", "Role": "CEO"})
+            company.related_entities.append({"Name": "Instagram", "Risk_Score": 90, "Relation": "Subsidiary"})
+            company.related_entities.append({"Name": "Reality Labs", "Risk_Score": 45, "Relation": "Cash Burn Unit"})
+            
+        elif "amazon" in name_lower:
+            company.key_people.append({"Name": "Jeff Bezos", "Role": "Founder"})
+            company.related_entities.append({"Name": "Blue Origin", "Risk_Score": 60, "Relation": "Ventures"})
+            
+        else:
+            # Generic fallback for unknown companies
+            company.key_people.append({"Name": "Board of Directors", "Role": "Governance"})
+            
+        return company
+
     def _get_smart_mock_data(self, company: Company) -> Company:
         """Fallback Simulation."""
         print(f"-> 🎲 Generating Simulation for: {company.name}")
@@ -119,6 +151,9 @@ class ReviewScraper:
         company.business_age = 15
         company.industry = "Technology (Simulated)"
         company.headquarters = "San Francisco, CA"
+        
+        # Tier 4 Mock Data
+        company.key_people.append({"Name": "John Doe", "Role": "CEO"})
         
         templates = [
             "Revenue beat expectations this quarter.",

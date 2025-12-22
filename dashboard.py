@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import graphviz
 from textblob import TextBlob 
 from src.models import Company
 from src.scraper import ReviewScraper
@@ -12,12 +13,12 @@ st.set_page_config(page_title="AltScore: Risk Engine", layout="wide", page_icon=
 st.markdown("""<style>.metric-card { background-color: #f0f2f6; padding: 20px; border-radius: 10px; text-align: center; }</style>""", unsafe_allow_html=True)
 
 st.title("🏦 AltScore: AI-Powered Credit Risk Engine")
-st.markdown("**Enterprise Edition:** `v4.0 (Final)` | **Module:** `Explainable AI & Reason Codes`")
+st.markdown("**Enterprise Edition:** `v5.0 (Full Suite)` | **Module:** `Contagion & Systemic Risk`")
 st.divider()
 
 # --- SIDEBAR ---
 st.sidebar.header("🔍 Due Diligence Controls")
-business_name = st.sidebar.text_input("Target Ticker / Company", value="Apple Inc.")
+business_name = st.sidebar.text_input("Target Ticker / Company", value="Tesla") # Default changed to Tesla to show off graph
 use_mock = st.sidebar.checkbox("Offline / Simulation Mode", value=False)
 st.sidebar.divider()
 st.sidebar.subheader("📂 Financial Documents")
@@ -51,15 +52,18 @@ if analyze_btn:
         st.subheader(f"📂 Corporate Profile: {company.name}")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Business Age", f"{company.business_age} Years")
-        c2.metric("Industry", company.industry if company.industry else "Unknown")
-        cash_display = f"${company.cash_balance:,.0f}" if company.has_verified_financials else "Unverified"
-        c3.metric("Verified Cash", cash_display, delta="Liquidity Verified" if company.has_verified_financials else None)
+        # NEW: Show Key Person (e.g. Elon Musk)
+        key_person = company.key_people[0]['Name'] if company.key_people else "Unknown"
+        c2.metric("Key Person", key_person)
+        # NEW: Show Contagion Penalty
+        c3.metric("Contagion Risk", f"-{company.contagion_penalty} pts", delta_color="inverse" if company.contagion_penalty > 0 else "off")
         c4.metric("Legal Status", "Clean" if not company.lawsuit_flag else "Flagged", delta_color="inverse" if company.lawsuit_flag else "off")
         st.divider()
 
-        # --- TABS ---
-        tab1, tab2 = st.tabs(["📊 Risk Dashboard", "📝 Raw Intelligence"])
+        # --- TABS (Updated to include Graph) ---
+        tab1, tab2, tab3 = st.tabs(["📊 Risk Dashboard", "🕸️ Ownership Graph", "📝 Raw Intelligence"])
 
+        # TAB 1: Main Dashboard
         with tab1:
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -70,17 +74,16 @@ if analyze_btn:
             with col3:
                 if company.lawsuit_flag:
                     st.error("⛔ DECISION: REJECT")
-                elif company.risk_score >= 60:
+                elif company.risk_score >= 55:
                     st.success("✅ DECISION: APPROVE")
                 elif company.risk_score >= 40:
                     st.warning("⚠️ DECISION: MANUAL REVIEW")
                 else:
                     st.error("❌ DECISION: REJECT")
 
-            # --- TIER 5: EXPLAINABILITY SECTION (NEW) ---
+            # Tier 5: Explainability
             st.divider()
             st.subheader("📋 Principal Reasons for Decision")
-            
             if company.decision_reasons:
                 for reason in company.decision_reasons:
                     st.warning(f"⚠️ {reason}")
@@ -98,7 +101,42 @@ if analyze_btn:
                 ax.axhline(0, color='black', linewidth=0.8)
                 st.pyplot(fig)
 
+        # TAB 2: Ownership Graph (NEW)
         with tab2:
+            st.subheader("Systemic Risk & Ownership Map")
+            st.markdown("Visualizing shared ownership and potential contagion vectors.")
+            
+            if company.key_people:
+                graph = graphviz.Digraph()
+                graph.attr(rankdir='LR')
+                
+                # Main Company Node
+                graph.node('MAIN', company.name, shape='doubleoctagon', style='filled', fillcolor='#ccffcc')
+                
+                # Owner Node
+                owner_name = company.key_people[0]['Name']
+                graph.node('OWNER', owner_name, shape='box', style='filled', fillcolor='#e0e0e0')
+                graph.edge('OWNER', 'MAIN', label="Owns/Runs")
+                
+                # Related Entities
+                for entity in company.related_entities:
+                    # Color code red if score is low (<50)
+                    is_risky = entity['Risk_Score'] < 50
+                    node_color = '#ffcccc' if is_risky else '#ccffcc'
+                    
+                    graph.node(entity['Name'], f"{entity['Name']}\n(Score: {entity['Risk_Score']})", style='filled', fillcolor=node_color)
+                    graph.edge('OWNER', entity['Name'], label=entity['Relation'])
+                    
+                    # Draw a red dashed line if contagion is happening
+                    if is_risky:
+                        graph.edge(entity['Name'], 'MAIN', color='red', style='dashed', label="Contagion Risk")
+
+                st.graphviz_chart(graph)
+            else:
+                st.info("No ownership data available for graph generation.")
+
+        # TAB 3: Raw Data
+        with tab3:
             st.subheader("Extracted Intelligence")
             if company.reviews:
                 data = [{"Date": r.date, "Headline": r.text, "Source": r.source} for r in company.reviews]

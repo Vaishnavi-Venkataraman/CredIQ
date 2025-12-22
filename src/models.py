@@ -1,6 +1,6 @@
 # src/models.py
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Dict
 
 @dataclass
 class Review:
@@ -16,7 +16,6 @@ class Company:
     
     # Containers
     reviews: List[Review] = field(default_factory=list)
-    competitors: List[str] = field(default_factory=list)
     
     # Tier 2 Metadata
     founding_year: int = 0
@@ -28,7 +27,14 @@ class Company:
     cash_balance: float = 0.0
     has_verified_financials: bool = False
     
-    # Tier 5: Explainability (New!)
+    # Tier 4: Ownership & Contagion (New!)
+    # Format: {"Name": "Elon Musk", "Role": "CEO"}
+    key_people: List[Dict[str, str]] = field(default_factory=list) 
+    # Format: {"Name": "SpaceX", "Risk_Score": 80}
+    related_entities: List[Dict[str, any]] = field(default_factory=list)
+    contagion_penalty: float = 0.0
+    
+    # Tier 5 Explainability
     decision_reasons: List[str] = field(default_factory=list)
     
     # Scores
@@ -46,7 +52,6 @@ class Company:
     def summary(self):
         return {
             "Name": self.name,
-            "Age": f"{self.business_age} Years",
             "Risk Score": self.risk_score,
-            "Top Reason": self.decision_reasons[0] if self.decision_reasons else "None"
+            "Contagion Impact": f"-{self.contagion_penalty} pts" if self.contagion_penalty > 0 else "None"
         }
