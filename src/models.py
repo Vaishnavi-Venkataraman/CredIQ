@@ -1,7 +1,6 @@
 # src/models.py
 from dataclasses import dataclass, field
 from typing import List, Optional
-import datetime
 
 @dataclass
 class Review:
@@ -25,9 +24,12 @@ class Company:
     industry: str = "Unknown"
     headquarters: str = "Unknown"
     
-    # --- TIER 3: FINANCIAL DATA  ---
-    cash_balance: float = 0.0  # From PDF
+    # Tier 3 Financials
+    cash_balance: float = 0.0
     has_verified_financials: bool = False
+    
+    # Tier 5: Explainability (New!)
+    decision_reasons: List[str] = field(default_factory=list)
     
     # Scores
     sentiment_score: float = 0.0
@@ -45,6 +47,6 @@ class Company:
         return {
             "Name": self.name,
             "Age": f"{self.business_age} Years",
-            "Cash Reserves": f"${self.cash_balance:,.2f}" if self.has_verified_financials else "Unverified",
-            "Risk Score": self.risk_score
+            "Risk Score": self.risk_score,
+            "Top Reason": self.decision_reasons[0] if self.decision_reasons else "None"
         }

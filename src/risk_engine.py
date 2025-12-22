@@ -6,12 +6,16 @@ import numpy as np
 
 class RiskEvaluator:
     """
-    Tier 3 Upgrade: Adds Financial Verification Logic (Cash Flow).
+    Tier 5 Upgrade: Explainable AI with Reason Codes.
     """
 
     def evaluate(self, company: Company) -> Company:
+        # Clear previous reasons to avoid duplicates
+        company.decision_reasons = []
+        
         if not company.reviews:
-            company.risk_score = 50.0 
+            company.risk_score = 50.0
+            company.decision_reasons.append("Insufficient data to generate full risk profile.")
             return company
 
         # 1. Convert Reviews to Pandas
@@ -27,7 +31,6 @@ class RiskEvaluator:
             # Compliance Check
             text_lower = review.text.lower()
             if any(term in text_lower for term in CRITICAL_RISK_TERMS):
-                print(f"⚠️ RED FLAG DETECTED: {review.text[:30]}...")
                 polarity = -1.0 
                 company.lawsuit_flag = True
             
@@ -42,7 +45,7 @@ class RiskEvaluator:
             company.risk_score = 50.0
             return company
 
-        # --- CALCULATE METRICS ---
+        # --- METRICS ---
         if len(df) >= 3:
             recent_avg = df['sentiment'].tail(3).mean()
             historical_avg = df['sentiment'].iloc[:-3].mean() if len(df) > 3 else 0.0
@@ -52,57 +55,55 @@ class RiskEvaluator:
         if np.isnan(volatility): volatility = 0.0
         company.news_volume_volatility = volatility
 
-        # --- SCORING MODEL v3.2 ---
+        # --- SCORING & EXPLAINABILITY ---
         avg_sentiment = df['sentiment'].mean()
         score = 50 + (avg_sentiment * 80) 
         
         # 1. Momentum Penalty
         if company.sentiment_momentum < -0.15:
-            print("📉 PENALTY: Negative Momentum")
             score -= 10
+            company.decision_reasons.append(f"Negative market sentiment trend detected ({company.sentiment_momentum:.2f} momentum).")
             
         # 2. Volatility Penalty
         if volatility > 0.4:
-            print("🌊 PENALTY: High Volatility")
             score -= 5
+            company.decision_reasons.append("High volatility in market news signals instability.")
             
-        # --- TIER 2: STABILITY ADJUSTMENTS ---
-        
-        # A. Business Age Logic
+        # 3. Age Logic
         if company.business_age > 0:
             if company.business_age < 2:
-                print("👶 RISK: Startup (<2 years)")
-                score -= 15 # High failure risk
+                score -= 15 
+                company.decision_reasons.append("High Risk: Early-stage startup (< 2 years operating history).")
             elif company.business_age > 20:
-                print("🏛️ BONUS: Legacy Business (>20 years)")
-                score += 5 # Proven track record
+                score += 5
                 
-        # B. Industry Risk (Simple Keyword Match)
+        # 4. Industry Risk
         high_risk_sectors = ["Restaurant", "Retail", "Airlines", "Construction"]
         if any(x in company.industry for x in high_risk_sectors):
-            print(f"🏭 RISK: High-Risk Sector ({company.industry})")
             score -= 5
+            company.decision_reasons.append(f"High-risk industry sector identified: {company.industry}.")
 
-        # --- TIER 3: FINANCIAL LIQUIDITY CHECK (New!) ---
-        # If the user uploaded a PDF and we found a balance:
+        # 5. Financial Liquidity
         if company.has_verified_financials:
             if company.cash_balance > 50000:
-                print("💰 BONUS: Strong Cash Reserves (>$50k)")
-                score += 15 # Huge confidence boost
-            elif company.cash_balance > 10000:
-                print("💵 BONUS: Healthy Cash Flow (>$10k)")
-                score += 5
+                score += 15 
             elif company.cash_balance < 1000:
-                print("📉 RISK: Low Cash Reserves (<$1k)")
                 score -= 10
+                company.decision_reasons.append("CRITICAL: Insufficient cash reserves verified (< $1,000).")
 
         # Final Cap
         final_score = max(0, min(100, score))
         
+        # 6. Hard Stop Logic (The most important reason)
         if company.lawsuit_flag:
-            print("⛔ HARD STOP: Legal Flag")
             final_score = min(final_score, 40.0)
+            # Insert at the TOP of the list
+            company.decision_reasons.insert(0, "HARD STOP: Active legal/regulatory risk detected in background check.")
             
+        # If score is low but no specific reasons found, add a generic one
+        if final_score < 50 and not company.decision_reasons:
+            company.decision_reasons.append("Overall negative market sentiment.")
+
         company.risk_score = round(final_score, 2)
         company.sentiment_score = avg_sentiment
         
