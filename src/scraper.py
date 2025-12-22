@@ -2,108 +2,69 @@
 import requests
 from bs4 import BeautifulSoup
 import random
-import hashlib
 from src.models import Company
 
 class ReviewScraper:
-    """
-    Auto-detects data sources. 
-    Searches Google News RSS for the company name automatically.
-    """
     
-    # List of browser signatures to avoid blocking
+    # Extensive list of User-Agents to rotate
     USER_AGENTS = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gecko/20100101 Firefox/89.0"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
     ]
 
     def fetch_data(self, company: Company, mock: bool = False) -> Company:
         """
-        Main entry point.
+        Attempts to scrape Google News RSS.
         """
-        print(f"--- 🔍 Starting Auto-Discovery for: {company.name} ---")
-
-        if mock:
-            return self._get_smart_mock_data(company)
+        print(f"--- 📡 DEBUG: Starting Scrape for '{company.name}' ---")
         
-        try:
-            # 1. Try Real News
-            company = self._fetch_google_news(company)
-            
-            # 2. Check if we actually got data
-            if len(company.reviews) > 0:
-                print(f"✅ Success: Found {len(company.reviews)} real articles.")
-                return company
-            else:
-                print("⚠️ Google returned 0 results. Switching to Simulation.")
-                return self._get_smart_mock_data(company)
-
-        except Exception as e:
-            print(f"❌ Error during scrape: {e}")
-            return self._get_smart_mock_data(company)
-
-    def _fetch_google_news(self, company: Company) -> Company:
-        """
-        Scrapes Google News RSS with proper Headers.
-        """
+        # 1. Clean name for URL
         clean_name = company.name.replace(" ", "%20")
-        # Simpler query to ensure results
-        url = f"https://news.google.com/rss/search?q={clean_name}+finance&hl=en-US&gl=US&ceid=US:en"
         
-        print(f"--- 📡 Pinging: {url} ---")
+        # 2. Construct URL (Google News RSS)
+        url = f"https://news.google.com/rss/search?q={clean_name}+business&hl=en-US&gl=US&ceid=US:en"
+        print(f"--- 🔗 Target URL: {url} ---")
         
-        # --- THE FIX IS HERE: ADDING HEADERS ---
+        # 3. Headers (CRITICAL: Must look like a real browser)
         headers = {
-            "User-Agent": random.choice(self.USER_AGENTS)
+            "User-Agent": random.choice(self.USER_AGENTS),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Referer": "https://www.google.com/",
+            "Upgrade-Insecure-Requests": "1"
         }
         
-        response = requests.get(url, headers=headers, timeout=5)
-        
-        if response.status_code == 200:
-            # parsing xml content
-            soup = BeautifulSoup(response.content, features="xml")
-            items = soup.find_all("item")[:8]
+        try:
+            # 4. Make the Request
+            response = requests.get(url, headers=headers, timeout=10)
             
-            for item in items:
-                title = item.title.text
-                pub_date = item.pubDate.text
-                company.add_review("Google News", title, 0.0, pub_date)
-        else:
-            print(f"Block detected: Status Code {response.status_code}")
+            print(f"--- 📊 HTTP Status: {response.status_code} ---")
+            
+            # 5. Check for Success
+            if response.status_code == 200:
+                # Parse XML
+                soup = BeautifulSoup(response.content, features="xml")
+                items = soup.find_all("item")
                 
-        return company
-
-    def _get_smart_mock_data(self, company: Company) -> Company:
-        """
-        Fallback generator.
-        """
-        print(f"-> 🎲 Generating Simulation for: {company.name}")
+                print(f"--- 📄 Items Found: {len(items)} ---")
+                
+                if len(items) == 0:
+                    print("⚠️ WARNING: Status 200 OK, but no <item> tags found. Google might have returned a CAPTCHA page.")
+                    # Debug: print first 200 chars to see what we actually got
+                    print(f"Response Snippet: {response.text[:200]}")
+                
+                for item in items[:10]: # Get top 10
+                    title = item.title.text
+                    pub_date = item.pubDate.text
+                    link = item.link.text
+                    
+                    # Store data
+                    company.add_review("Google News", title, 0.0, pub_date)
+            else:
+                print("❌ ERROR: Blocked or Failed.")
         
-        seed_value = int(hashlib.sha256(company.name.encode('utf-8')).hexdigest(), 16) % 10**8
-        random.seed(seed_value)
-        
-        is_good = seed_value % 2 == 0 
-        
-        if is_good:
-            templates = [
-                f"{company.name} reports strong quarterly earnings.",
-                "Stock price jumps 5% on positive outlook.",
-                "New strategic partnership announced.",
-                "Analyst upgrades rating to Buy.",
-                "Expansion into Asian markets is succeeding."
-            ]
-        else:
-            templates = [
-                f"{company.name} faces regulatory scrutiny.",
-                "Shares tumble after missed earnings report.",
-                "CEO warns of supply chain issues.",
-                "Class action lawsuit filed against the company.",
-                "Analyst downgrades rating to Sell."
-            ]
-            
-        for _ in range(5):
-            text = random.choice(templates)
-            company.add_review("Simulated Intel", text, 0.0, "2025-12-21")
+        except Exception as e:
+            print(f"❌ EXCEPTION: {e}")
             
         return company

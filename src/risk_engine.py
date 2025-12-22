@@ -2,46 +2,55 @@
 from textblob import TextBlob
 from src.models import Company
 import statistics
+import math
 
 class RiskEvaluator:
-    """
-    The 'Brain' of the system.
-    Converts unstructured text into a mathematical Risk Score (0-100).
-    """
 
     def evaluate(self, company: Company) -> Company:
         if not company.reviews:
-            company.risk_score = 50.0 # Neutral risk if no data
+            company.risk_score = 50.0 
             return company
 
         sentiment_scores = []
+        red_flags = 0
         
-        print(f"--- Analyzying Risk for {company.name} ---")
+        # KEYWORDS that tank the score immediately
+        CRITICAL_RISK_TERMS = ["bankruptcy", "fraud", "investigation", "subpoena", "default", "scandal"]
+
+        print(f"--- 🧠 Analyzing Risk for {company.name} ---")
 
         for review in company.reviews:
             # 1. NLP Processing
-            # TextBlob calculates polarity: -1.0 (Bad) to +1.0 (Good)
             blob = TextBlob(review.text)
             polarity = blob.sentiment.polarity
             
-            # 2. Risk Weighting logic
-            # If text contains "fraud" or "bankrupt", force score down (Keyword Flagging)
-            if "fraud" in review.text.lower() or "bankrupt" in review.text.lower():
-                polarity = -1.0
-                print(f"ALERT: Red Flag keyword detected in: '{review.text[:30]}...'")
+            # 2. Keyword Penalty (The "Compliance" Check)
+            text_lower = review.text.lower()
+            for term in CRITICAL_RISK_TERMS:
+                if term in text_lower:
+                    print(f"⚠️ RED FLAG DETECTED: {term}")
+                    polarity -= 0.5 # Massive penalty
+                    red_flags += 1
 
             sentiment_scores.append(polarity)
 
-        # 3. Calculate Aggregate Metrics
-        avg_sentiment = statistics.mean(sentiment_scores)
+        # 3. Statistical Aggregation
+        if not sentiment_scores:
+            avg_sentiment = 0
+        else:
+            avg_sentiment = statistics.mean(sentiment_scores)
+
+        # 4. Standardized Scoring 
+        score_raw = 50 + (avg_sentiment * 100)
+        
+        # Cap the limits
+        score_clamped = max(0, min(100, score_raw))
+        
+        # 5. Apply Red Flag Penalties
+        # Each red flag drops the score by 10 points flat
+        final_score = score_clamped - (red_flags * 10)
+        
         company.sentiment_score = avg_sentiment
-        
-        # 4. Convert Sentiment (-1 to 1) to a Credit Score (0 to 100)
-        # Formula: Map [-1, 1] -> [0, 100]
-        # -1 (Bad) should be High Risk? Or Low Credit Score?
-        # Let's say: 0 is High Risk (Bad), 100 is Low Risk (Good).
-        normalized_score = ((avg_sentiment + 1) / 2) * 100
-        
-        company.risk_score = round(normalized_score, 2)
+        company.risk_score = round(max(0, final_score), 2)
         
         return company

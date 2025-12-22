@@ -1,28 +1,24 @@
-# test.py
+# test_scraper.py
 from src.models import Company
 from src.scraper import ReviewScraper
-from src.risk_engine import RiskEvaluator
 
-# 1. Setup
-print("\n=== SYSTEM START ===")
-company = Company(name="Joe's Pizza", url="http://fake-url.com")
+# 1. Define Target
+target_name = "Tesla"  # Try different names here (Tesla, Apple, Domino's)
+print(f"\n🧪 TEST STARTING FOR: {target_name}")
 
-# 2. Ingest Data (Using Mock Mode=True to ensure it works)
+# 2. Initialize
+company = Company(name=target_name, url="")
 scraper = ReviewScraper()
-company = scraper.fetch_yelp_data(company.url, company, mock=True)
 
-# 3. Analyze Risk
-engine = RiskEvaluator()
-company = engine.evaluate(company)
+# 3. Run Scrape (Mock=False to force real connection)
+company = scraper.fetch_data(company, mock=False)
 
-# 4. Output Report
-print("\n=== CREDIT RISK REPORT ===")
-print(f"Applicant: {company.name}")
-print(f"Data Points: {len(company.reviews)} reviews processed")
-print(f"Sentiment Polarity: {company.sentiment_score:.4f} (-1.0 to +1.0)")
-print(f"FINAL CREDIT SCORE: {company.risk_score} / 100")
-
-if company.risk_score < 50:
-    print("DECISION: REJECT LOAN (High Risk)")
+# 4. Report Results
+print("\n--- 🏁 TEST RESULTS ---")
+if len(company.reviews) > 0:
+    print(f"✅ SUCCESS! Scraped {len(company.reviews)} articles.")
+    print("Top 3 Headlines:")
+    for i, review in enumerate(company.reviews[:3]):
+        print(f"  {i+1}. [{review.date}] {review.text}")
 else:
-    print("DECISION: APPROVE LOAN")
+    print("❌ FAILURE: No data retrieved.")
