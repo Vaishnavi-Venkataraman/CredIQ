@@ -8,3 +8,4 @@ graphviz
 lxml
 pdfplumber
 fpdf
+yfinance

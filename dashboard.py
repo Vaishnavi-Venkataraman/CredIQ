@@ -3,6 +3,8 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import graphviz
+import requests
+import yfinance as yf
 from textblob import TextBlob 
 from src.report_generator import generate_pdf  
 from src.models import Company
@@ -19,7 +21,8 @@ st.divider()
 
 # --- SIDEBAR ---
 st.sidebar.header("🔍 Due Diligence Controls")
-business_name = st.sidebar.text_input("Target Ticker / Company", value="Tesla") # Default changed to Tesla to show off graph
+business_name = st.sidebar.text_input("Company Name", value="Tesla")
+ticker_symbol = st.sidebar.text_input("Stock Ticker", value="TSLA") 
 use_mock = st.sidebar.checkbox("Offline / Simulation Mode", value=False)
 st.sidebar.divider()
 st.sidebar.subheader("📂 Financial Documents")
@@ -101,8 +104,78 @@ if analyze_btn:
                 ax.bar(range(len(scores)), scores, color=colors)
                 ax.axhline(0, color='black', linewidth=0.8)
                 st.pyplot(fig)
+            
 
-        # TAB 2: Ownership Graph (NEW)
+            # --- TIER 6: LIVE STOCK MARKET ---
+            st.divider()
+            
+            # CHECK: Only run if user actually typed a ticker
+            if ticker_symbol and ticker_symbol.strip() != "":
+                st.subheader(f"📈 Market Signals: {ticker_symbol.upper()}")
+                ALPHA_VANTAGE_KEY = "DQII4IL567BTP0RZ" 
+            
+                if ALPHA_VANTAGE_KEY != "DQII4IL567BTP0RZ":
+                    st.markdown("[Get Free Key Here](https://www.alphavantage.co/support/#api-key)")
+                else:
+                    try:
+                        # 2. REAL API CALL
+                        url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker_symbol}&apikey={ALPHA_VANTAGE_KEY}&datatype=json"
+                        response = requests.get(url, timeout=10)
+                        data = response.json()
+                        
+                        # 3. PARSE JSON DATA
+                        if "Time Series (Daily)" in data:
+                            ts = data["Time Series (Daily)"]
+                            df_stock = pd.DataFrame.from_dict(ts, orient='index')
+                            
+                            # Clean Data
+                            df_stock = df_stock.rename(columns={"4. close": "Close"})
+                            df_stock["Close"] = df_stock["Close"].astype(float)
+                            df_stock.index = pd.to_datetime(df_stock.index)
+                            df_stock = df_stock.sort_index() # Sort strictly by date
+                            
+                            # Limit to last 6 months (~126 trading days)
+                            df_recent = df_stock.tail(126)
+                            
+                            # 4. CALCULATE METRICS
+                            current_price = df_recent['Close'].iloc[-1]
+                            start_price = df_recent['Close'].iloc[0]
+                            delta = ((current_price - start_price) / start_price) * 100
+                            
+                            # Volatility (Standard Deviation of Returns)
+                            returns = df_stock['Close'].pct_change()
+                            volatility = returns.std() * (252 ** 0.5) * 100
+                            
+                            # Drawdown (Crash risk)
+                            rolling_max = df_stock['Close'].cummax()
+                            drawdown = (df_stock['Close'] - rolling_max) / rolling_max
+                            max_drawdown = drawdown.min() * 100
+
+                            # 5. DISPLAY
+                            m1, m2, m3 = st.columns(3)
+                            m1.metric("Current Price", f"${current_price:.2f}", f"{delta:.2f}% (6mo)")
+                            
+                            vol_color = "inverse" if volatility > 40 else "normal"
+                            m2.metric("Annualized Volatility", f"{volatility:.1f}%", delta="High Risk" if volatility > 40 else "Stable", delta_color=vol_color)
+                            
+                            dd_color = "inverse" if max_drawdown < -20 else "normal"
+                            m3.metric("Max Drawdown (1Y)", f"{max_drawdown:.1f}%", delta="Crash Detected" if max_drawdown < -20 else "Resilient", delta_color=dd_color)
+                            
+                            st.area_chart(df_recent['Close'], color="#0068c9")
+                            
+                        elif "Note" in data:
+                            st.info("⚠️ API Limit Reached. Alpha Vantage (Free) allows 5 calls per minute. Wait a moment.")
+                        else:
+                            st.error("Error fetching data. Check Ticker Symbol.")
+                            
+                    except Exception as e:
+                        st.error(f"API Connection Failed: {e}")
+
+            else:
+                st.info("ℹ️ Stock analysis skipped (No ticker symbol provided).")
+            
+            
+        # TAB 2: Ownership Graph
         with tab2:
             st.subheader("Systemic Risk & Ownership Map")
             st.markdown("Visualizing shared ownership and potential contagion vectors.")
