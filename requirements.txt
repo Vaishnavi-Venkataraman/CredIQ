@@ -9,3 +9,5 @@ lxml
 pdfplumber
 fpdf
 openpyxl
+yfinance
+google-generativeai

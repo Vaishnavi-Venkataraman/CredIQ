@@ -4,7 +4,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import graphviz
 import requests
-import yfinance as yf
+import numpy as np
+import time
 from textblob import TextBlob 
 from src.excel_generator import generate_excel
 from src.report_generator import generate_pdf  
@@ -12,134 +13,152 @@ from src.models import Company
 from src.scraper import ReviewScraper
 from src.risk_engine import RiskEvaluator
 from src.pdf_analyzer import FinancialAnalyzer
+from src.ai_analyst import AIAnalyst
+
+# --- 🔐 API KEYS ------------------------------------------------------
+GEMINI_API_KEY = "AIzaSyDyHrOJ135jySiXo3_wjjuAu70TlNaPcfA" 
+ALPHA_VANTAGE_KEY = "DQII4IL567BTP0RZ" 
+# ----------------------------------------------------------------------
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="AltScore: Risk Engine", layout="wide", page_icon="🏦")
 st.markdown("""<style>.metric-card { background-color: #f0f2f6; padding: 20px; border-radius: 10px; text-align: center; }</style>""", unsafe_allow_html=True)
 
-# --- 1. CACHING LAYER (The Speed Boost) ---
+# --- 1. CACHING LAYER ---
 @st.cache_data(show_spinner=False)
 def get_fresh_data(name, use_mock):
-    """
-    Fetches data and runs initial risk analysis. 
-    Cached so repeating the same search is instant.
-    """
-    # Setup & Scrape
-    comp = Company(name=name, url="") 
-    scraper = ReviewScraper()
-    comp = scraper.fetch_data(comp, mock=use_mock)
-    
-    # Compute Initial Risk
-    engine = RiskEvaluator()
-    comp = engine.evaluate(comp)
-    
-    return comp
+    try:
+        comp = Company(name=name, url="") 
+        scraper = ReviewScraper()
+        comp = scraper.fetch_data(comp, mock=use_mock)
+        engine = RiskEvaluator()
+        comp = engine.evaluate(comp)
+        return comp
+    except Exception as e:
+        return Company(name=name, url="")
 
-# --- 2. SESSION STATE INIT (The Persistence Layer) ---
-if 'company' not in st.session_state:
-    st.session_state.company = None
+# --- 2. SESSION STATE INIT ---
+if 'company' not in st.session_state: st.session_state.company = None
+if 'ai_summary' not in st.session_state: st.session_state.ai_summary = None
+if 'ai_peers' not in st.session_state: st.session_state.ai_peers = None
 
 # --- HEADER ---
 st.title("🏦 AltScore: AI-Powered Credit Risk Engine")
-st.markdown("**Enterprise Edition:** `v7.0 (Cached & Fast)` | **Module:** `Full Suite`")
+st.markdown("**Enterprise Edition:** `v10.1 (Metrics Restored)` | **Module:** `Full Suite`")
 st.divider()
 
 # --- SIDEBAR ---
 st.sidebar.header("🔍 Due Diligence Controls")
+
+# Key Cleaner
+if GEMINI_API_KEY: GEMINI_API_KEY = GEMINI_API_KEY.strip()
+
+if "PASTE" in GEMINI_API_KEY or not GEMINI_API_KEY:
+    st.sidebar.warning("⚠️ No AI Key detected. Edit dashboard.py line 18.")
+
 business_name = st.sidebar.text_input("Company Name", value="Tesla")
 ticker_symbol = st.sidebar.text_input("Stock Ticker", value="TSLA") 
 use_mock = st.sidebar.checkbox("Offline / Simulation Mode", value=False)
 st.sidebar.divider()
-
-st.sidebar.subheader("📂 Financial Documents")
 uploaded_file = st.sidebar.file_uploader("Upload Bank Statement (PDF)", type="pdf")
 
 # --- PROCESS BUTTON LOGIC ---
 if st.sidebar.button("🚀 Run Risk Analysis"):
     with st.spinner(f"📡 Hunting data for '{business_name}'..."):
         
-        # A. Get Data (Cached)
-        # We use the cached function here. If inputs match, it skips scraping.
+        # A. Get Data
         comp = get_fresh_data(business_name, use_mock)
         
-        # B. Process PDF (Not cached, as files change)
+        # B. Process PDF
         if uploaded_file:
-            pdf_engine = FinancialAnalyzer()
-            balance = pdf_engine.analyze_statement(uploaded_file)
-            if balance > 0:
-                comp.cash_balance = balance
-                comp.has_verified_financials = True
-                
-                # Re-run risk engine to account for new cash data
-                engine = RiskEvaluator()
-                comp = engine.evaluate(comp)
-                
-                st.sidebar.success(f"Verified Balance: ${balance:,.2f}")
-            else:
-                st.sidebar.warning("Could not extract 'Ending Balance'.")
+            try:
+                pdf_engine = FinancialAnalyzer()
+                balance = pdf_engine.analyze_statement(uploaded_file)
+                if balance > 0:
+                    comp.cash_balance = balance
+                    comp.has_verified_financials = True
+                    engine = RiskEvaluator()
+                    comp = engine.evaluate(comp)
+                    st.sidebar.success(f"Verified Balance: ${balance:,.2f}")
+                else:
+                    st.sidebar.warning("Could not extract 'Ending Balance'.")
+            except Exception as e:
+                st.sidebar.error(f"PDF Error: {e}")
 
-        # C. Update Session State
+        # C. RUN AI ANALYSIS (With Strict Fallback)
+        # Default Fallback first
+        st.session_state.ai_peers = ["SPY", "QQQ"] 
+        
+        if GEMINI_API_KEY and "PASTE" not in GEMINI_API_KEY:
+            try:
+                ai = AIAnalyst(GEMINI_API_KEY)
+                st.session_state.ai_summary = ai.generate_risk_summary(comp)
+                
+                # Try to get peers
+                if ticker_symbol:
+                    fetched_peers = ai.get_competitors(business_name)
+                    # Only overwrite if we actually got a list
+                    if fetched_peers and len(fetched_peers) > 0:
+                         st.session_state.ai_peers = fetched_peers
+                         
+            except Exception as e:
+                st.error(f"AI Connection Failed: {e}")
+                # Fallback remains SPY/QQQ
+        else:
+            st.session_state.ai_summary = None
+
         st.session_state.company = comp
 
 # --- MAIN DASHBOARD RENDERER ---
-# This runs whenever data exists in memory, preventing reload wipes.
 if st.session_state.company:
     company = st.session_state.company
 
-    # --- HEADER METRICS (5 Cols) ---
+    # 1. AI EXECUTIVE SUMMARY
+    if st.session_state.ai_summary:
+        st.info(f"🤖 **AI Executive Summary:** {st.session_state.ai_summary}")
+    elif "PASTE" in GEMINI_API_KEY:
+        st.warning("ℹ️ AI Summary skipped. Add Key to enable.")
+
+    # Metrics
     st.subheader(f"📂 Corporate Profile: {company.name}")
     c1, c2, c3, c4, c5 = st.columns(5)
-    
     c1.metric("Business Age", f"{company.business_age} Years")
-    
-    key_person = company.key_people[0]['Name'] if company.key_people else "Unknown"
-    c2.metric("Key Person", key_person)
-    
+    key_p = company.key_people[0]['Name'] if company.key_people else "Unknown"
+    c2.metric("Key Person", key_p)
     c3.metric("Contagion Risk", f"-{company.contagion_penalty} pts", delta_color="inverse" if company.contagion_penalty > 0 else "off")
-    
-    # Geo Risk Metric
     geo_color = "inverse" if "High" in company.geo_risk_label or "Risk" in company.geo_risk_label else "normal"
     c4.metric("Geo Profile", company.geo_risk_label, help=f"HQ: {company.headquarters}", delta_color=geo_color)
-    
     c5.metric("Legal Status", "Clean" if not company.lawsuit_flag else "Flagged", delta_color="inverse" if company.lawsuit_flag else "off")
-    
     st.divider()
 
-    # --- TABS ---
+    # Tabs
     tab1, tab2, tab3 = st.tabs(["📊 Risk Dashboard", "🕸️ Ownership Graph", "📝 Raw Intelligence"])
 
-    # TAB 1: Main Dashboard
     with tab1:
         col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("AltCredit Score", f"{company.risk_score}/100", delta=f"{company.sentiment_momentum:.3f} Momentum")
-        with col2:
-            sentiment_label = "Positive" if company.sentiment_score > 0 else "Negative"
-            st.metric("News Sentiment", sentiment_label, delta=f"Vol: {company.news_volume_volatility:.2f}")
-        with col3:
-            if company.lawsuit_flag:
-                st.error("⛔ DECISION: REJECT")
-            elif company.risk_score >= 55:
-                st.success("✅ DECISION: APPROVE")
-            elif company.risk_score >= 40:
-                st.warning("⚠️ DECISION: MANUAL REVIEW")
-            else:
-                st.error("❌ DECISION: REJECT")
+        col1.metric("AltCredit Score", f"{company.risk_score}/100", delta=f"{company.sentiment_momentum:.3f} Momentum")
+        col2.metric("News Sentiment", "Positive" if company.sentiment_score > 0 else "Negative", delta=f"Vol: {company.news_volume_volatility:.2f}")
+        
+        if company.lawsuit_flag:
+            col3.error("⛔ DECISION: REJECT")
+        elif company.risk_score >= 55:
+            col3.success("✅ DECISION: APPROVE")
+        elif company.risk_score >= 40:
+            col3.warning("⚠️ DECISION: MANUAL REVIEW")
+        else:
+            col3.error("❌ DECISION: REJECT")
 
-        # Tier 5: Explainability
         st.divider()
         st.subheader("📋 Principal Reasons for Decision")
         if company.decision_reasons:
             for reason in company.decision_reasons:
                 st.warning(f"⚠️ {reason}")
         else:
-            st.info("✅ No negative risk factors detected. Strong applicant profile.")
+            st.info("✅ No negative risk factors detected.")
 
         st.divider()
-        
         if company.reviews:
             st.subheader("Market Volatility Analysis")
-            # Using the correctly saved .rating from your fix
             scores = [r.rating for r in company.reviews] 
             if scores:
                 fig, ax = plt.subplots(figsize=(10, 3))
@@ -148,144 +167,124 @@ if st.session_state.company:
                 ax.axhline(0, color='black', linewidth=0.8)
                 st.pyplot(fig)
         
-
-        # --- TIER 6: LIVE STOCK MARKET ---
+        # --- TIER 7: ALPHA VANTAGE + METRICS ---
         st.divider()
-        
         if ticker_symbol and ticker_symbol.strip() != "":
-            st.subheader(f"📈 Market Signals: {ticker_symbol.upper()}")
+            st.subheader(f"📈 Competitive Benchmarking")
             
-            ALPHA_VANTAGE_KEY = "DQII4IL567BTP0RZ" 
-        
-            if ALPHA_VANTAGE_KEY == "PASTE_YOUR_KEY_HERE":
-                st.markdown("[Get Free Key Here](https://www.alphavantage.co/support/#api-key)")
-            else:
+            # Use Fallback if AI didn't return anything
+            peers = st.session_state.ai_peers if st.session_state.ai_peers else ["SPY", "QQQ"]
+            
+            # Fetch target + max 2 peers (Total 3 calls < 5 call limit)
+            tickers_to_fetch = [ticker_symbol.upper()] + peers[:2]
+            
+            st.caption(f"Fetching: {', '.join(tickers_to_fetch)}")
+
+            data_frames = {}
+            main_metrics = None
+            
+            for t in tickers_to_fetch:
                 try:
-                    # 2. REAL API CALL
-                    url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker_symbol}&apikey={ALPHA_VANTAGE_KEY}&datatype=json"
+                    url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={t}&apikey={ALPHA_VANTAGE_KEY}&datatype=json"
                     response = requests.get(url, timeout=10)
                     data = response.json()
                     
-                    # 3. PARSE JSON DATA
                     if "Time Series (Daily)" in data:
                         ts = data["Time Series (Daily)"]
                         df_stock = pd.DataFrame.from_dict(ts, orient='index')
-                        
-                        # Clean Data
                         df_stock = df_stock.rename(columns={"4. close": "Close"})
                         df_stock["Close"] = df_stock["Close"].astype(float)
                         df_stock.index = pd.to_datetime(df_stock.index)
-                        df_stock = df_stock.sort_index() # Sort strictly by date
+                        df_stock = df_stock.sort_index()
                         
-                        # Limit to last 6 months (~126 trading days)
-                        df_recent = df_stock.tail(126)
+                        # FIX: Use .copy() to avoid SettingWithCopyWarning
+                        df_recent = df_stock.tail(126).copy() 
                         
-                        # 4. CALCULATE METRICS
-                        current_price = df_recent['Close'].iloc[-1]
-                        start_price = df_recent['Close'].iloc[0]
-                        delta = ((current_price - start_price) / start_price) * 100
-                        
-                        # Volatility (Standard Deviation of Returns)
-                        returns = df_stock['Close'].pct_change()
-                        volatility = returns.std() * (252 ** 0.5) * 100
-                        
-                        # Drawdown (Crash risk)
-                        rolling_max = df_stock['Close'].cummax()
-                        drawdown = (df_stock['Close'] - rolling_max) / rolling_max
-                        max_drawdown = drawdown.min() * 100
+                        # METRICS CALCULATION (Only for Main Ticker)
+                        if t == ticker_symbol.upper():
+                            current_price = df_recent['Close'].iloc[-1]
+                            start_price = df_recent['Close'].iloc[0]
+                            delta = ((current_price - start_price) / start_price) * 100
+                            
+                            returns = df_recent['Close'].pct_change()
+                            volatility = returns.std() * (252 ** 0.5) * 100
+                            
+                            rolling_max = df_recent['Close'].cummax()
+                            drawdown = (df_recent['Close'] - rolling_max) / rolling_max
+                            max_drawdown = drawdown.min() * 100
+                            
+                            main_metrics = {
+                                "price": current_price,
+                                "delta": delta,
+                                "vol": volatility,
+                                "dd": max_drawdown
+                            }
 
-                        # 5. DISPLAY
-                        m1, m2, m3 = st.columns(3)
-                        m1.metric("Current Price", f"${current_price:.2f}", f"{delta:.2f}% (6mo)")
-                        
-                        vol_color = "inverse" if volatility > 40 else "normal"
-                        m2.metric("Annualized Volatility", f"{volatility:.1f}%", delta="High Risk" if volatility > 40 else "Stable", delta_color=vol_color)
-                        
-                        dd_color = "inverse" if max_drawdown < -20 else "normal"
-                        m3.metric("Max Drawdown (1Y)", f"{max_drawdown:.1f}%", delta="Crash Detected" if max_drawdown < -20 else "Resilient", delta_color=dd_color)
-                        
-                        st.area_chart(df_recent['Close'], color="#0068c9")
+                        start_price_chart = df_recent['Close'].iloc[0]
+                        df_recent['Normalized'] = ((df_recent['Close'] - start_price_chart) / start_price_chart) * 100
+                        data_frames[t] = df_recent['Normalized']
                         
                     elif "Note" in data:
-                        st.info("⚠️ API Limit Reached. Alpha Vantage (Free) allows 5 calls per minute. Wait a moment.")
-                    else:
-                        st.error("Error fetching data. Check Ticker Symbol.")
+                        st.warning(f"⚠️ API Rate Limit Hit fetching {t}. Stopping.")
+                        break 
                         
                 except Exception as e:
-                    st.error(f"API Connection Failed: {e}")
+                    st.error(f"Error fetching {t}: {e}")
+            
+            # DISPLAY METRICS
+            if main_metrics:
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Current Price", f"${main_metrics['price']:.2f}", f"{main_metrics['delta']:.2f}% (6mo)")
+                
+                vol_color = "inverse" if main_metrics['vol'] > 40 else "normal"
+                m2.metric("Annualized Volatility", f"{main_metrics['vol']:.1f}%", delta="High Risk" if main_metrics['vol'] > 40 else "Stable", delta_color=vol_color)
+                
+                dd_color = "inverse" if main_metrics['dd'] < -20 else "normal"
+                m3.metric("Max Drawdown (1Y)", f"{main_metrics['dd']:.1f}%", delta="Crash Detected" if main_metrics['dd'] < -20 else "Resilient", delta_color=dd_color)
 
+            # DISPLAY CHART
+            if data_frames:
+                st.line_chart(pd.DataFrame(data_frames))
+            else:
+                st.info("ℹ️ No market data available (Check API Key or Network).")
         else:
-            st.info("ℹ️ Stock analysis skipped (No ticker symbol provided).")
+            st.info("ℹ️ Stock analysis skipped.")
         
-        
-    # TAB 2: Ownership Graph
     with tab2:
         st.subheader("Systemic Risk & Ownership Map")
-        st.markdown("Visualizing shared ownership and potential contagion vectors.")
-        
         if company.key_people:
             graph = graphviz.Digraph()
             graph.attr(rankdir='LR')
-            
-            # Main Company Node
             graph.node('MAIN', company.name, shape='doubleoctagon', style='filled', fillcolor='#ccffcc')
-            
-            # Owner Node
             owner_name = company.key_people[0]['Name']
             graph.node('OWNER', owner_name, shape='box', style='filled', fillcolor='#e0e0e0')
             graph.edge('OWNER', 'MAIN', label="Owns/Runs")
             
-            # Related Entities
             for entity in company.related_entities:
-                # Color code red if score is low (<50)
                 is_risky = entity['Risk_Score'] < 50
                 node_color = '#ffcccc' if is_risky else '#ccffcc'
-                
                 graph.node(entity['Name'], f"{entity['Name']}\n(Score: {entity['Risk_Score']})", style='filled', fillcolor=node_color)
                 graph.edge('OWNER', entity['Name'], label=entity['Relation'])
-                
-                # Draw a red dashed line if contagion is happening
                 if is_risky:
                     graph.edge(entity['Name'], 'MAIN', color='red', style='dashed', label="Contagion Risk")
-
             st.graphviz_chart(graph)
         else:
-            st.info("No ownership data available for graph generation.")
+            st.info("No ownership data.")
 
-    # TAB 3: Raw Data
     with tab3:
         st.subheader("Extracted Intelligence")
         if company.reviews:
-            # Using specific fields to match Excel
             display_data = [{"Date": r.date, "Headline": r.text, "Source": r.source, "Sentiment": r.rating} for r in company.reviews]
-            st.dataframe(pd.DataFrame(display_data), use_container_width=True)
+            st.dataframe(pd.DataFrame(display_data), width="stretch") 
 
-    # --- SIDEBAR: DOWNLOAD REPORT ---
     st.sidebar.divider()
     st.sidebar.subheader("Export")
-
-    # Generate Files
     report_pdf = generate_pdf(company)
     excel_data = generate_excel(company)
-    
     col1, col2 = st.sidebar.columns(2)
-    
     with col1:
-        st.download_button(
-            label="📄 PDF Report",
-            data=report_pdf,
-            file_name=f"{company.name}_Credit_Memo.pdf",
-            mime="application/pdf"
-        )
-        
+        st.download_button("📄 PDF Report", report_pdf, f"{company.name}_Credit_Memo.pdf", "application/pdf")
     with col2:
-        st.download_button(
-            label="📊 Excel Data",
-            data=excel_data,
-            file_name=f"{company.name}_Financials.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        
+        st.download_button("📊 Excel Data", excel_data, f"{company.name}_Financials.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 else:
-    # --- LANDING PAGE (When no data is loaded yet) ---
     st.info("👋 Welcome to AltScore. Enter a company name in the sidebar and click 'Run Risk Analysis' to begin.")
