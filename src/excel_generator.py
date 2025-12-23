@@ -5,10 +5,8 @@ from src.models import Company
 import datetime
 
 def generate_excel(company: Company):
-    # Create an in-memory byte stream
     output = io.BytesIO()
     
-    # Create a Pandas Excel Writer
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         
         # --- SHEET 1: EXECUTIVE SUMMARY ---
@@ -31,10 +29,21 @@ def generate_excel(company: Company):
                 datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ]
         }
-        df_summary = pd.DataFrame(summary_data)
-        df_summary.to_excel(writer, sheet_name='Executive Summary', index=False)
+        pd.DataFrame(summary_data).to_excel(writer, sheet_name='Executive Summary', index=False)
         
-        # --- SHEET 2: MARKET INTELLIGENCE (Raw News) ---
+        # --- SHEET 2: AI INTELLIGENCE (NEW!) ---
+        # We create a small table for the AI data
+        ai_data = {
+            "Insight Type": ["AI Executive Summary", " identified Peers", "Data Source"],
+            "Content": [
+                company.ai_summary if company.ai_summary else "Not Generated",
+                ", ".join(company.ai_peers) if company.ai_peers else "Default (SPY, QQQ)",
+                "Google Gemini 1.5 Flash"
+            ]
+        }
+        pd.DataFrame(ai_data).to_excel(writer, sheet_name='AI Intelligence', index=False)
+
+        # --- SHEET 3: MARKET NEWS ---
         if company.reviews:
             news_data = []
             for r in company.reviews:
@@ -44,20 +53,14 @@ def generate_excel(company: Company):
                     "Headline": r.text,
                     "Sentiment": r.rating
                 })
-            df_news = pd.DataFrame(news_data)
-            df_news.to_excel(writer, sheet_name='Market Intel', index=False)
+            pd.DataFrame(news_data).to_excel(writer, sheet_name='Market News', index=False)
             
-        # --- SHEET 3: CONTAGION NETWORK ---
+        # --- SHEET 4: NETWORK & RISKS ---
         if company.related_entities:
-            network_data = company.related_entities
-            df_network = pd.DataFrame(network_data)
-            df_network.to_excel(writer, sheet_name='Related Entities', index=False)
+            pd.DataFrame(company.related_entities).to_excel(writer, sheet_name='Related Network', index=False)
             
-        # --- SHEET 4: DECISION REASONS ---
         if company.decision_reasons:
-            df_reasons = pd.DataFrame({"Risk Factors": company.decision_reasons})
-            df_reasons.to_excel(writer, sheet_name='Risk Factors', index=False)
+            pd.DataFrame({"Risk Factors": company.decision_reasons}).to_excel(writer, sheet_name='Risk Factors', index=False)
 
-    # Rewind the buffer
     output.seek(0)
     return output

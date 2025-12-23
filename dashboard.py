@@ -15,7 +15,7 @@ from src.risk_engine import RiskEvaluator
 from src.pdf_analyzer import FinancialAnalyzer
 from src.ai_analyst import AIAnalyst
 
-# --- 🔐 API KEYS ------------------------------------------------------
+# ---  API KEYS ------------------------------------------------------
 GEMINI_API_KEY = "AIzaSyDyHrOJ135jySiXo3_wjjuAu70TlNaPcfA" 
 ALPHA_VANTAGE_KEY = "DQII4IL567BTP0RZ" 
 # ----------------------------------------------------------------------
@@ -23,6 +23,23 @@ ALPHA_VANTAGE_KEY = "DQII4IL567BTP0RZ"
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="AltScore: Risk Engine", layout="wide", page_icon="🏦")
 st.markdown("""<style>.metric-card { background-color: #f0f2f6; padding: 20px; border-radius: 10px; text-align: center; }</style>""", unsafe_allow_html=True)
+
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+
+def check_password():
+    # PASSWORD IS SET TO: admin
+    if st.session_state.password_input == "admin": 
+        st.session_state.authenticated = True
+        del st.session_state.password_input
+    else:
+        st.error("❌ Access Denied: Invalid Credentials")
+
+if not st.session_state.authenticated:
+    st.markdown("## 🔒 AltScore Enterprise Login")
+    st.markdown("Please verify your credentials to access the Risk Engine.")
+    st.text_input("Enter Password", type="password", key="password_input", on_change=check_password)
+    st.stop() # <--- STOPS THE APP HERE UNTIL LOGGED IN
 
 # --- 1. CACHING LAYER ---
 @st.cache_data(show_spinner=False)
@@ -44,11 +61,11 @@ if 'ai_peers' not in st.session_state: st.session_state.ai_peers = None
 
 # --- HEADER ---
 st.title("🏦 AltScore: AI-Powered Credit Risk Engine")
-st.markdown("**Enterprise Edition:** `v10.2 (PDF Integration)` | **Module:** `Full Suite`")
+st.markdown("**Enterprise Edition:** `v11.0 (Secure)` | **User:** `Admin`")
 st.divider()
 
 # --- SIDEBAR ---
-st.sidebar.header("🔍 Due Diligence Controls")
+st.sidebar.header("Due Diligence Controls")
 
 # Key Cleaner
 if GEMINI_API_KEY: GEMINI_API_KEY = GEMINI_API_KEY.strip()
@@ -97,9 +114,8 @@ if st.sidebar.button("🚀 Run Risk Analysis"):
                 summary_text = ai.generate_risk_summary(comp)
                 st.session_state.ai_summary = summary_text
                 
-                # --- CRITICAL FIX: Save to Company Object for PDF ---
+                # SAVE TO COMPANY OBJECT (For PDF/Excel)
                 comp.ai_summary = summary_text 
-                # ----------------------------------------------------
                 
                 # 2. Try to get peers
                 if ticker_symbol:
@@ -114,11 +130,15 @@ if st.sidebar.button("🚀 Run Risk Analysis"):
         else:
             st.session_state.ai_summary = None
 
-        # --- CRITICAL FIX: Save Peers to Company Object for PDF ---
+        # SAVE PEERS TO COMPANY OBJECT (For PDF/Excel)
         comp.ai_peers = st.session_state.ai_peers
-        # ----------------------------------------------------------
 
         st.session_state.company = comp
+
+# Logout Button
+if st.sidebar.button("🚪 Logout"):
+    st.session_state.authenticated = False
+    st.rerun()
 
 # --- MAIN DASHBOARD RENDERER ---
 if st.session_state.company:
