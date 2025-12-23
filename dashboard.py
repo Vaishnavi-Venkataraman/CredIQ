@@ -6,6 +6,7 @@ import graphviz
 import requests
 import yfinance as yf
 from textblob import TextBlob 
+from src.excel_generator import generate_excel
 from src.report_generator import generate_pdf  
 from src.models import Company
 from src.scraper import ReviewScraper
@@ -227,14 +228,26 @@ if analyze_btn:
 
     # --- SIDEBAR: DOWNLOAD REPORT ---
     st.sidebar.divider()
-    st.sidebar.subheader("📄 Export")
+    st.sidebar.subheader("Export")
 
     # Generate the PDF
     report_pdf = generate_pdf(company)
-
-    st.sidebar.download_button(
-        label="Download Credit Memo (PDF)",
-        data=report_pdf,
-        file_name=f"{company.name}_Credit_Memo.pdf",
-        mime="application/pdf"
-    )
+    excel_data = generate_excel(company)
+    
+    col1, col2 = st.sidebar.columns(2)
+    
+    with col1:
+        st.download_button(
+            label="📄 PDF Report",
+            data=report_pdf,
+            file_name=f"{company.name}_Credit_Memo.pdf",
+            mime="application/pdf"
+        )
+        
+    with col2:
+        st.download_button(
+            label="📊 Excel Data",
+            data=excel_data,
+            file_name=f"{company.name}_Financials.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )

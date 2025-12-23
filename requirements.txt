@@ -8,4 +8,4 @@ graphviz
 lxml
 pdfplumber
 fpdf
-yfinance
+openpyxl

@@ -25,9 +25,13 @@ class RiskEvaluator:
         
         print(f"--- 🧠 Analyzing Risk for {company.name} ---")
 
-        for review in company.reviews:
+        # --- CRITICAL FIX: Iterate with ENUMERATE to force update in place ---
+        for i, review in enumerate(company.reviews):
             blob = TextBlob(review.text)
             polarity = blob.sentiment.polarity
+            
+            # FORCE UPDATE THE OBJECT IN THE LIST
+            company.reviews[i].rating = polarity 
             
             # Compliance Check
             text_lower = review.text.lower()
@@ -100,22 +104,20 @@ class RiskEvaluator:
                 score -= penalty
                 company.decision_reasons.append(f"Contagion Risk: Sister company '{entity['Name']}' is distressed.")
 
-        # --- 7. GEO-ECONOMIC RISK (NEW!) ---
+        # --- 7. GEO-ECONOMIC RISK ---
         hq = company.headquarters.lower()
         company.geo_risk_label = "Neutral Zone"
         
-        # A. High Cost Zones (Rent/Tax Pressure)
+        # A. High Cost Zones
         high_cost_zones = ["california", " ca", "new york", " ny", "san francisco", "manhattan", "massachusetts"]
         if any(z in hq for z in high_cost_zones):
             company.geo_risk_score = 70.0
             company.geo_risk_label = "High Operational Cost Zone"
-            
-            # Startups in high cost zones burn cash faster -> Penalty
             if company.business_age < 5:
                 score -= 5
                 company.decision_reasons.append(f"Geo-Risk: High burn-rate location ({company.headquarters}) for early-stage co.")
 
-        # B. Climate/Disaster Zones (Insurance Risk)
+        # B. Climate/Disaster Zones
         disaster_zones = ["florida", " fl", "louisiana", " la", "miami", "houston"]
         if any(z in hq for z in disaster_zones):
             company.geo_risk_score = 60.0
