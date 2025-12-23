@@ -195,19 +195,19 @@ streamlit run dashboard.py
 
 ## 🔮 Roadmap
 
-* 🧾 **SME Risk Analyzer**
+* **SME Risk Analyzer:**
   Lightweight credit scoring engine for small enterprises using alternative data
 
-* 🔗 **Neo4j Integration**
+* **Neo4j Integration:**
   Persistent graph storage for deep ownership and exposure analysis
 
-* 📰 **Live News Feed**
+* **Live News Feed:**
   Continuous sentiment refresh with alerts
 
-* 📊 **Stress Testing Engine**
+* **Stress Testing Engine:**
   Scenario-based macroeconomic and liquidity shock simulations
 
-* 🐳 **Dockerization**
+* **Dockerization:**
   One-command containerized deployment
 
 ---
