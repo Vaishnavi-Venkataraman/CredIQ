@@ -16,7 +16,7 @@ st.set_page_config(page_title="AltScore: Risk Engine", layout="wide", page_icon=
 st.markdown("""<style>.metric-card { background-color: #f0f2f6; padding: 20px; border-radius: 10px; text-align: center; }</style>""", unsafe_allow_html=True)
 
 st.title("🏦 AltScore: AI-Powered Credit Risk Engine")
-st.markdown("**Enterprise Edition:** `v5.0 (Full Suite)` | **Module:** `Contagion & Systemic Risk`")
+st.markdown("**Enterprise Edition:** `v6.0 (Geo-Economic)` | **Module:** `Full Suite`")
 st.divider()
 
 # --- SIDEBAR ---
@@ -52,19 +52,26 @@ if analyze_btn:
         engine = RiskEvaluator()
         company = engine.evaluate(company)
         
-        # --- HEADER ---
+        # --- HEADER (UPDATED TO 5 COLUMNS FOR GEO RISK) ---
         st.subheader(f"📂 Corporate Profile: {company.name}")
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3, c4, c5 = st.columns(5) # <--- Changed to 5
+        
         c1.metric("Business Age", f"{company.business_age} Years")
-        # NEW: Show Key Person (e.g. Elon Musk)
+        
         key_person = company.key_people[0]['Name'] if company.key_people else "Unknown"
         c2.metric("Key Person", key_person)
-        # NEW: Show Contagion Penalty
+        
         c3.metric("Contagion Risk", f"-{company.contagion_penalty} pts", delta_color="inverse" if company.contagion_penalty > 0 else "off")
-        c4.metric("Legal Status", "Clean" if not company.lawsuit_flag else "Flagged", delta_color="inverse" if company.lawsuit_flag else "off")
+        
+        # NEW: Geo Risk Metric
+        geo_color = "inverse" if "High" in company.geo_risk_label or "Risk" in company.geo_risk_label else "normal"
+        c4.metric("Geo Profile", company.geo_risk_label, help=f"HQ: {company.headquarters}", delta_color=geo_color)
+        
+        c5.metric("Legal Status", "Clean" if not company.lawsuit_flag else "Flagged", delta_color="inverse" if company.lawsuit_flag else "off")
+        
         st.divider()
 
-        # --- TABS (Updated to include Graph) ---
+        # --- TABS ---
         tab1, tab2, tab3 = st.tabs(["📊 Risk Dashboard", "🕸️ Ownership Graph", "📝 Raw Intelligence"])
 
         # TAB 1: Main Dashboard
@@ -112,9 +119,11 @@ if analyze_btn:
             # CHECK: Only run if user actually typed a ticker
             if ticker_symbol and ticker_symbol.strip() != "":
                 st.subheader(f"📈 Market Signals: {ticker_symbol.upper()}")
+                
+                # PASTE YOUR KEY HERE
                 ALPHA_VANTAGE_KEY = "DQII4IL567BTP0RZ" 
             
-                if ALPHA_VANTAGE_KEY != "DQII4IL567BTP0RZ":
+                if ALPHA_VANTAGE_KEY == "PASTE_YOUR_KEY_HERE":
                     st.markdown("[Get Free Key Here](https://www.alphavantage.co/support/#api-key)")
                 else:
                     try:

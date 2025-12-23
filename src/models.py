@@ -23,14 +23,16 @@ class Company:
     industry: str = "Unknown"
     headquarters: str = "Unknown"
     
+    # Tier 2.5: Geo-Economic Risk
+    geo_risk_score: float = 0.0  
+    geo_risk_label: str = "Neutral" # e.g. "High Cost Zone"
+    
     # Tier 3 Financials
     cash_balance: float = 0.0
     has_verified_financials: bool = False
     
-    # Tier 4: Ownership & Contagion (New!)
-    # Format: {"Name": "Elon Musk", "Role": "CEO"}
+    # Tier 4: Ownership & Contagion
     key_people: List[Dict[str, str]] = field(default_factory=list) 
-    # Format: {"Name": "SpaceX", "Risk_Score": 80}
     related_entities: List[Dict[str, any]] = field(default_factory=list)
     contagion_penalty: float = 0.0
     
@@ -52,6 +54,6 @@ class Company:
     def summary(self):
         return {
             "Name": self.name,
-            "Risk Score": self.risk_score,
-            "Contagion Impact": f"-{self.contagion_penalty} pts" if self.contagion_penalty > 0 else "None"
+            "HQ": self.headquarters,
+            "Geo Risk": self.geo_risk_label
         }

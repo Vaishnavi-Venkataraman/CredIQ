@@ -4,10 +4,20 @@ from src.models import Company
 import datetime
 
 def clean_text(text):
-    if not isinstance(text, str): return str(text)
-    replacements = {'\u2018': "'", '\u2019': "'", '\u201c': '"', '\u201d': '"', '\u2013': '-', '\u2032': "'", '\u2026': "..."}
+
+    if not isinstance(text, str):
+        return str(text)
+        
+    # Replacements for common "smart" characters
+    replacements = {
+        '\u2018': "'", '\u2019': "'", 
+        '\u201c': '"', '\u201d': '"', 
+        '\u2013': '-', '\u2014': '-', 
+        '\u2032': "'", '\u2026': "..."
+    }
     for char, replacement in replacements.items():
         text = text.replace(char, replacement)
+        
     return text.encode('latin-1', 'replace').decode('latin-1')
 
 class PDFReport(FPDF):
@@ -26,7 +36,7 @@ def generate_pdf(company: Company):
     pdf = PDFReport()
     pdf.add_page()
     
-    # 1. TITLE & METADATA
+    # --- 1. TITLE & METADATA ---
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, f"Target Entity: {clean_text(company.name)}", 0, 1)
     
@@ -41,7 +51,7 @@ def generate_pdf(company: Company):
     pdf.cell(0, 6, clean_text(f"Headquarters: {hq}"), 0, 1)
     pdf.ln(5)
     
-    # 2. RISK ASSESSMENT (SCORE)
+    # --- 2. SCORE & DECISION ---
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, "Risk Assessment", 0, 1)
     
@@ -61,7 +71,7 @@ def generate_pdf(company: Company):
     pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
 
-    # 3. PRINCIPAL REASONS
+    # --- 3. PRINCIPAL REASONS ---
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, "Principal Reasons for Decision", 0, 1)
     pdf.set_font("Arial", "", 10)
@@ -73,32 +83,36 @@ def generate_pdf(company: Company):
         pdf.cell(0, 6, "- No critical risk factors identified.", 0, 1)
     pdf.ln(5)
 
-    # --- NEW SECTION: DETAILED METRICS ---
+    # --- 4. DETAILED METRICS (NEW! INCLUDES GEO RISK) ---
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, "Quantitative Risk Metrics", 0, 1)
     pdf.set_font("Arial", "", 10)
-    pdf.cell(0, 6, f"Sentiment Momentum: {company.sentiment_momentum:.3f}", ln=True)
-    pdf.cell(0, 6, f"News Volatility: {company.news_volume_volatility:.3f}", ln=True)
-    pdf.cell(0, 6, f"Legal Flags: {'YES' if company.lawsuit_flag else 'None'}", ln=True)
-
-    pdf.ln(5)
-
-    # -------------------------------------
     
-    # 4. FINANCIAL VERIFICATION
+    # Row 1
+    pdf.cell(95, 6, f"Sentiment Momentum: {company.sentiment_momentum:.3f}", 0, 0)
+    pdf.cell(95, 6, f"News Volatility: {company.news_volume_volatility:.3f}", 0, 1)
+    
+    # Row 2 (Geo Risk)
+    pdf.cell(95, 6, f"Geo-Economic Zone: {clean_text(company.geo_risk_label)}", 0, 0)
+    pdf.cell(95, 6, f"Legal Flags: {'YES' if company.lawsuit_flag else 'None'}", 0, 1)
+    pdf.ln(5)
+    
+    # --- 5. FINANCIALS ---
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "Financial Liquidity Verification", 0, 1)
+    pdf.cell(0, 10, "Financial Verification", 0, 1)
     pdf.set_font("Arial", "", 10)
     
-    cash_str = f"${company.cash_balance:,.2f}" if company.has_verified_financials else "Unverified (No Documents)"
+    cash_str = f"${company.cash_balance:,.2f}" if company.has_verified_financials else "Unverified"
     pdf.cell(0, 6, f"Verified Cash Balance: {cash_str}", 0, 1)
     
     if company.contagion_penalty > 0:
         pdf.set_text_color(200, 0, 0)
         pdf.cell(0, 6, f"Contagion Penalty Applied: -{company.contagion_penalty} pts", 0, 1)
         pdf.set_text_color(0, 0, 0)
+    else:
+        pdf.cell(0, 6, "No contagion penalties applied.", 0, 1)
         
-    # 5. RELATED ENTITIES
+    # --- 6. RELATED ENTITIES ---
     if company.related_entities:
         pdf.ln(2)
         pdf.set_font("Arial", "I", 9)
