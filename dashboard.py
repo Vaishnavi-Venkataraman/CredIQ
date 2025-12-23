@@ -4,6 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import graphviz
 from textblob import TextBlob 
+from src.report_generator import generate_pdf  
 from src.models import Company
 from src.scraper import ReviewScraper
 from src.risk_engine import RiskEvaluator
@@ -141,3 +142,17 @@ if analyze_btn:
             if company.reviews:
                 data = [{"Date": r.date, "Headline": r.text, "Source": r.source} for r in company.reviews]
                 st.dataframe(pd.DataFrame(data), use_container_width=True)
+
+    # --- SIDEBAR: DOWNLOAD REPORT ---
+    st.sidebar.divider()
+    st.sidebar.subheader("📄 Export")
+
+    # Generate the PDF
+    report_pdf = generate_pdf(company)
+
+    st.sidebar.download_button(
+        label="Download Credit Memo (PDF)",
+        data=report_pdf,
+        file_name=f"{company.name}_Credit_Memo.pdf",
+        mime="application/pdf"
+    )

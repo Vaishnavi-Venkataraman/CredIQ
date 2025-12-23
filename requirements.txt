@@ -4,5 +4,7 @@ beautifulsoup4
 textblob
 streamlit
 matplotlib
+graphviz
 lxml
 pdfplumber
+fpdf
