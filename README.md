@@ -17,7 +17,7 @@
 
 ## 📌 Overview
 
-**CredIQ** is an enterprise-grade **credit risk assessment and corporate due-diligence platform** inspired by modern fintech and institutional banking systems.
+**CredIQ (AltScore)** is an enterprise-grade **credit risk assessment and corporate due-diligence platform** inspired by modern fintech and institutional banking systems.
 
 It combines **deterministic financial modeling**, **real-time market intelligence**, and **Generative AI** to deliver **transparent, explainable, and regulator-friendly** credit decisions.
 
