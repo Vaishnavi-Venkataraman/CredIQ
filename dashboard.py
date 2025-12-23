@@ -44,7 +44,7 @@ if 'ai_peers' not in st.session_state: st.session_state.ai_peers = None
 
 # --- HEADER ---
 st.title("🏦 AltScore: AI-Powered Credit Risk Engine")
-st.markdown("**Enterprise Edition:** `v10.1 (Metrics Restored)` | **Module:** `Full Suite`")
+st.markdown("**Enterprise Edition:** `v10.2 (PDF Integration)` | **Module:** `Full Suite`")
 st.divider()
 
 # --- SIDEBAR ---
@@ -54,7 +54,7 @@ st.sidebar.header("🔍 Due Diligence Controls")
 if GEMINI_API_KEY: GEMINI_API_KEY = GEMINI_API_KEY.strip()
 
 if "PASTE" in GEMINI_API_KEY or not GEMINI_API_KEY:
-    st.sidebar.warning("⚠️ No AI Key detected. Edit dashboard.py line 18.")
+    st.sidebar.warning("⚠️ No AI Key detected. Edit dashboard.py line 19.")
 
 business_name = st.sidebar.text_input("Company Name", value="Tesla")
 ticker_symbol = st.sidebar.text_input("Stock Ticker", value="TSLA") 
@@ -92,9 +92,16 @@ if st.sidebar.button("🚀 Run Risk Analysis"):
         if GEMINI_API_KEY and "PASTE" not in GEMINI_API_KEY:
             try:
                 ai = AIAnalyst(GEMINI_API_KEY)
-                st.session_state.ai_summary = ai.generate_risk_summary(comp)
                 
-                # Try to get peers
+                # 1. Generate Summary
+                summary_text = ai.generate_risk_summary(comp)
+                st.session_state.ai_summary = summary_text
+                
+                # --- CRITICAL FIX: Save to Company Object for PDF ---
+                comp.ai_summary = summary_text 
+                # ----------------------------------------------------
+                
+                # 2. Try to get peers
                 if ticker_symbol:
                     fetched_peers = ai.get_competitors(business_name)
                     # Only overwrite if we actually got a list
@@ -106,6 +113,10 @@ if st.sidebar.button("🚀 Run Risk Analysis"):
                 # Fallback remains SPY/QQQ
         else:
             st.session_state.ai_summary = None
+
+        # --- CRITICAL FIX: Save Peers to Company Object for PDF ---
+        comp.ai_peers = st.session_state.ai_peers
+        # ----------------------------------------------------------
 
         st.session_state.company = comp
 

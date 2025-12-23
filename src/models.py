@@ -48,6 +48,10 @@ class Company:
     news_volume_volatility: float = 0.0
     lawsuit_flag: bool = False
     
+    # --- NEW: AI Fields for PDF Report ---
+    ai_summary: str = ""
+    ai_peers: List[str] = field(default_factory=list)
+    
     def add_review(self, source, text, rating, date):
         self.reviews.append(Review(source, text, rating, date))
 

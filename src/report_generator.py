@@ -4,7 +4,6 @@ from src.models import Company
 import datetime
 
 def clean_text(text):
-
     if not isinstance(text, str):
         return str(text)
         
@@ -69,9 +68,21 @@ def generate_pdf(company: Company):
         
     pdf.cell(0, 15, f"Score: {score}/100 ({status})", 0, 1)
     pdf.set_text_color(0, 0, 0)
-    pdf.ln(5)
+    pdf.ln(2)
 
-    # --- 3. PRINCIPAL REASONS ---
+    # --- 3. NEW: AI EXECUTIVE INSIGHT ---
+    if company.ai_summary:
+        pdf.set_font("Arial", "B", 12)
+        # Light Gray Background for AI Section
+        pdf.set_fill_color(240, 240, 240) 
+        pdf.cell(0, 10, "AI Executive Insight (Gemini 1.5)", 0, 1, fill=True)
+        
+        pdf.set_font("Arial", "I", 10)
+        # Multi_cell handles text wrapping automatically
+        pdf.multi_cell(0, 6, clean_text(company.ai_summary))
+        pdf.ln(5)
+
+    # --- 4. PRINCIPAL REASONS ---
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, "Principal Reasons for Decision", 0, 1)
     pdf.set_font("Arial", "", 10)
@@ -83,7 +94,7 @@ def generate_pdf(company: Company):
         pdf.cell(0, 6, "- No critical risk factors identified.", 0, 1)
     pdf.ln(5)
 
-    # --- 4. DETAILED METRICS (NEW! INCLUDES GEO RISK) ---
+    # --- 5. DETAILED METRICS & BENCHMARKS ---
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, "Quantitative Risk Metrics", 0, 1)
     pdf.set_font("Arial", "", 10)
@@ -95,9 +106,14 @@ def generate_pdf(company: Company):
     # Row 2 (Geo Risk)
     pdf.cell(95, 6, f"Geo-Economic Zone: {clean_text(company.geo_risk_label)}", 0, 0)
     pdf.cell(95, 6, f"Legal Flags: {'YES' if company.lawsuit_flag else 'None'}", 0, 1)
+    
+    # Row 3 (Competitors)
+    pdf.ln(6)
+    peers_str = ", ".join(company.ai_peers) if company.ai_peers else "Sector Index (SPY)"
+    pdf.cell(0, 6, clean_text(f"Benchmarked Against: {peers_str}"), 0, 1)
     pdf.ln(5)
     
-    # --- 5. FINANCIALS ---
+    # --- 6. FINANCIALS ---
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, "Financial Verification", 0, 1)
     pdf.set_font("Arial", "", 10)
@@ -112,7 +128,7 @@ def generate_pdf(company: Company):
     else:
         pdf.cell(0, 6, "No contagion penalties applied.", 0, 1)
         
-    # --- 6. RELATED ENTITIES ---
+    # --- 7. RELATED ENTITIES ---
     if company.related_entities:
         pdf.ln(2)
         pdf.set_font("Arial", "I", 9)
